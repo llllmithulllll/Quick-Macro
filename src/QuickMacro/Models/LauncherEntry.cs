@@ -13,6 +13,7 @@ public sealed class LauncherEntry
     public string WorkingDirectory { get; set; } = "";
     public LauncherTargetType TargetType { get; set; } = LauncherTargetType.FilePath;
     public ShortcutAction ShortcutAction { get; set; } = ShortcutAction.Launch;
+    public bool MinimizeToSystemTray { get; set; }
     public ShortcutBinding? Shortcut { get; set; }
     public bool Enabled { get; set; } = true;
 }

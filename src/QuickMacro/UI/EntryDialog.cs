@@ -14,6 +14,7 @@ public sealed class EntryDialog : Form
     private readonly Label _shortcutLabel = new() { AutoSize = true, ForeColor = Color.White };
     private readonly CheckBox _windowsModifier = new() { Text = "Windows key", AutoSize = true };
     private readonly ComboBox _shortcutAction = new() { DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill };
+    private readonly CheckBox _minimizeToTray = new() { Text = "Hide app in QuickMacro’s tray when minimized", AutoSize = true };
     private ShortcutBinding? _shortcut;
     private bool _recording;
     private readonly Guid _id;
@@ -23,9 +24,8 @@ public sealed class EntryDialog : Form
     {
         _id = entry?.Id ?? Guid.NewGuid(); _shortcut = entry?.Shortcut;
         Text = entry is null ? "Add application or website" : "Edit shortcut"; Width = 700; Height = 570; MinimumSize = new Size(650, 520); FormBorderStyle = FormBorderStyle.Sizable; StartPosition = FormStartPosition.CenterParent; MaximizeBox = false; MinimizeBox = false; BackColor = Color.FromArgb(13, 18, 30); ForeColor = Color.FromArgb(237, 242, 250); Font = new Font("Segoe UI", 9F); KeyPreview = true;
-        var table = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(14), ColumnCount = 4, RowCount = 9, BackColor = this.BackColor };
-        foreach (var height in new[] { 38, 38, 40, 38, 38, 54, 44, 34, 46 }) table.RowStyles.Add(new RowStyle(SizeType.Absolute, height));
-        table.RowStyles[8].Height = 46;
+        var table = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(14), ColumnCount = 4, RowCount = 10, BackColor = this.BackColor };
+        foreach (var height in new[] { 38, 38, 40, 38, 38, 54, 44, 34, 34, 46 }) table.RowStyles.Add(new RowStyle(SizeType.Absolute, height));
         table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 126)); table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96)); table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96));
 
         AddRow(table, 0, "Name", _name);
@@ -49,17 +49,20 @@ public sealed class EntryDialog : Form
         _shortcutAction.BackColor = Raised; _shortcutAction.ForeColor = Color.FromArgb(237, 242, 250); _shortcutAction.FlatStyle = FlatStyle.Flat;
         table.Controls.Add(new Label { Text = "When shortcut is pressed", AutoSize = true, Anchor = AnchorStyles.Left }, 0, 6);
         table.Controls.Add(_shortcutAction, 1, 6); table.SetColumnSpan(_shortcutAction, 3);
-        table.Controls.Add(_enabled, 1, 7);
+        _minimizeToTray.ForeColor = Color.FromArgb(237, 242, 250);
+        table.Controls.Add(_minimizeToTray, 1, 7); table.SetColumnSpan(_minimizeToTray, 3);
+        table.Controls.Add(_enabled, 1, 8);
         var actions = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft, BackColor = this.BackColor };
-        var save = StyleButton(new Button { Text = "Save", AutoSize = true }, true); save.Click += (_, _) => SaveEntry(); var cancel = StyleButton(new Button { Text = "Cancel", AutoSize = true, DialogResult = DialogResult.Cancel }); actions.Controls.Add(save); actions.Controls.Add(cancel); table.Controls.Add(actions, 0, 8); table.SetColumnSpan(actions, 4);
+        var save = StyleButton(new Button { Text = "Save", AutoSize = true }, true); save.Click += (_, _) => SaveEntry(); var cancel = StyleButton(new Button { Text = "Cancel", AutoSize = true, DialogResult = DialogResult.Cancel }); actions.Controls.Add(save); actions.Controls.Add(cancel); table.Controls.Add(actions, 0, 9); table.SetColumnSpan(actions, 4);
         Controls.Add(table); AcceptButton = save; CancelButton = cancel;
 
         foreach (var textBox in new[] { _name, _path, _args, _working }) { textBox.BackColor = Raised; textBox.ForeColor = Color.FromArgb(237, 242, 250); textBox.BorderStyle = BorderStyle.FixedSingle; }
         _enabled.ForeColor = Color.FromArgb(237, 242, 250); _windowsModifier.ForeColor = Color.FromArgb(237, 242, 250);
         var actionIndex = (int)(entry?.ShortcutAction ?? ShortcutAction.Launch);
         _shortcutAction.SelectedIndex = actionIndex >= 0 && actionIndex < _shortcutAction.Items.Count ? actionIndex : 0;
-        if (entry is not null) { _name.Text = entry.Name; _path.Text = entry.TargetPath; _args.Text = entry.Arguments; _working.Text = entry.WorkingDirectory; _enabled.Checked = entry.Enabled; _windowsModifier.Checked = entry.Shortcut?.Windows ?? false; }
+        if (entry is not null) { _name.Text = entry.Name; _path.Text = entry.TargetPath; _args.Text = entry.Arguments; _working.Text = entry.WorkingDirectory; _enabled.Checked = entry.Enabled; _windowsModifier.Checked = entry.Shortcut?.Windows ?? false; _minimizeToTray.Checked = entry.MinimizeToSystemTray; }
         _targetKind.SelectedIndexChanged += (_, _) => UpdateTargetControls();
+        _shortcutAction.SelectedIndexChanged += (_, _) => UpdateTrayOption();
         _chooseTarget.Click += (_, _) => ChooseTarget();
         UpdateShortcutLabel(); UpdateTargetControls();
         KeyDown += CaptureKey;
@@ -101,6 +104,13 @@ public sealed class EntryDialog : Form
         };
         _shortcutAction.Enabled = type != LauncherTargetType.WebsiteUrl;
         if (type == LauncherTargetType.WebsiteUrl) _shortcutAction.SelectedIndex = (int)ShortcutAction.Launch;
+        UpdateTrayOption();
+    }
+
+    private void UpdateTrayOption()
+    {
+        _minimizeToTray.Visible = SelectedTargetType != LauncherTargetType.WebsiteUrl
+            && _shortcutAction.SelectedIndex == (int)ShortcutAction.Minimize;
     }
 
     private void ChooseTarget()
@@ -158,7 +168,8 @@ public sealed class EntryDialog : Form
 
     private void SaveEntry()
     {
-        var candidate = new LauncherEntry { Id = _id, Name = _name.Text.Trim(), TargetPath = _path.Text.Trim(), TargetType = SelectedTargetType, ShortcutAction = (ShortcutAction)Math.Max(0, _shortcutAction.SelectedIndex), Arguments = _args.Text, WorkingDirectory = _working.Text.Trim(), Shortcut = _shortcut, Enabled = _enabled.Checked };
+        var action = (ShortcutAction)Math.Max(0, _shortcutAction.SelectedIndex);
+        var candidate = new LauncherEntry { Id = _id, Name = _name.Text.Trim(), TargetPath = _path.Text.Trim(), TargetType = SelectedTargetType, ShortcutAction = action, MinimizeToSystemTray = action == ShortcutAction.Minimize && _minimizeToTray.Checked, Arguments = _args.Text, WorkingDirectory = _working.Text.Trim(), Shortcut = _shortcut, Enabled = _enabled.Checked };
         var error = ShortcutRules.ValidateEntry(candidate);
         if (error is not null) { MessageBox.Show(this, error, "Check shortcut details", MessageBoxButtons.OK, MessageBoxIcon.Warning); return; }
         Entry = candidate; DialogResult = DialogResult.OK; Close();

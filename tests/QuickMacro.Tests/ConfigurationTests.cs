@@ -8,12 +8,13 @@ public class ConfigurationTests
     [Fact]
     public void Configuration_round_trips_through_json()
     {
-        var config = new AppConfiguration { Entries = [new LauncherEntry { Name = "Notepad", TargetPath = @"C:\Windows\notepad.exe", ShortcutAction = ShortcutAction.Close, Shortcut = new ShortcutBinding { Control = true, Alt = true, Key = Keys.N } }] };
+        var config = new AppConfiguration { Entries = [new LauncherEntry { Name = "Notepad", TargetPath = @"C:\Windows\notepad.exe", ShortcutAction = ShortcutAction.Close, MinimizeToSystemTray = true, Shortcut = new ShortcutBinding { Control = true, Alt = true, Key = Keys.N } }] };
         var json = System.Text.Json.JsonSerializer.Serialize(config);
         var copy = System.Text.Json.JsonSerializer.Deserialize<AppConfiguration>(json)!;
         Assert.Equal("Notepad", copy.Entries.Single().Name);
         Assert.Equal(config.Entries.Single().Shortcut, copy.Entries.Single().Shortcut);
         Assert.Equal(ShortcutAction.Close, copy.Entries.Single().ShortcutAction);
+        Assert.True(copy.Entries.Single().MinimizeToSystemTray);
     }
 
     [Fact]

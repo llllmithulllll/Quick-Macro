@@ -6,22 +6,39 @@ namespace QuickMacro.Services;
 
 public static class WindowActionService
 {
+    public sealed record HiddenWindow(Guid EntryId, string EntryName, string WindowTitle, IntPtr Handle);
+
     private const int SwMinimize = 6;
+    private const int SwHide = 0;
     private const int SwRestore = 9;
     private const uint WmSysCommand = 0x0112;
     private static readonly IntPtr ScMinimize = new(0xF020);
     private const uint ProcessQueryLimitedInformation = 0x1000;
     private const uint WmClose = 0x0010;
+    private static readonly object HiddenWindowsLock = new();
+    private static readonly Dictionary<Guid, List<HiddenWindow>> HiddenWindows = [];
     private static readonly Guid PropertyStoreId = new("886D8EEB-8CF2-4446-8D02-CDBA1DBDCF99");
     private static readonly PropertyKey AppUserModelIdKey = new(new Guid("9F4C2855-9F79-4B39-A8D0-E1D42DE1D5F3"), 5);
 
     /// <summary>Applies a configured action to visible top-level windows. Returns true if a matching window was found.</summary>
     public static bool TryApply(LauncherEntry entry)
     {
-        if (entry.ShortcutAction == ShortcutAction.Launch || entry.TargetType == LauncherTargetType.WebsiteUrl) return false;
+        var previouslyHidden = TakeHiddenWindows(entry.Id);
+        previouslyHidden.RemoveAll(window => !IsWindow(window.Handle));
+        if (entry.ShortcutAction == ShortcutAction.Minimize && previouslyHidden.Count > 0)
+        {
+            RestoreWindows(previouslyHidden, activateFirst: true);
+            return true;
+        }
+        if (entry.ShortcutAction == ShortcutAction.Launch || entry.TargetType == LauncherTargetType.WebsiteUrl)
+        {
+            RestoreWindows(previouslyHidden, activateFirst: false);
+            return false;
+        }
+
         var executablePath = entry.TargetType is LauncherTargetType.FilePath or LauncherTargetType.BrowserAppShortcut ? ResolveExecutablePath(entry.TargetPath) : null;
         var shortcutAppId = entry.TargetType == LauncherTargetType.BrowserAppShortcut ? GetShortcutAppUserModelId(entry.TargetPath) : null;
-        var windows = new List<IntPtr>();
+        var windows = previouslyHidden.Where(window => IsWindow(window.Handle)).Select(window => window.Handle).ToList();
         EnumWindows((handle, _) =>
         {
             if (!IsWindowVisible(handle)) return true;
@@ -47,7 +64,11 @@ public static class WindowActionService
             }
             else
             {
-                foreach (var window in windows)
+                if (entry.MinimizeToSystemTray)
+                {
+                    HideWindowsInTray(entry, windows);
+                }
+                else foreach (var window in windows)
                 {
                     // Some applications ignore an asynchronous show-state request.
                     // Queue the standard system minimize command as a fallback too.
@@ -60,6 +81,85 @@ public static class WindowActionService
         // A matching window means the configured action was handled. Do not launch a
         // second copy just because ShowWindowAsync reports its prior visibility state.
         return windows.Count > 0;
+    }
+
+    public static IReadOnlyList<HiddenWindow> GetHiddenWindows()
+    {
+        lock (HiddenWindowsLock)
+        {
+            foreach (var entry in HiddenWindows.ToArray())
+            {
+                entry.Value.RemoveAll(window => !IsWindow(window.Handle) || IsWindowVisible(window.Handle));
+                if (entry.Value.Count == 0) HiddenWindows.Remove(entry.Key);
+            }
+            return HiddenWindows.Values.SelectMany(windows => windows).ToArray();
+        }
+    }
+
+    public static void RestoreHiddenWindow(IntPtr handle)
+    {
+        HiddenWindow? hidden = null;
+        lock (HiddenWindowsLock)
+        {
+            foreach (var entry in HiddenWindows.ToArray())
+            {
+                var index = entry.Value.FindIndex(window => window.Handle == handle);
+                if (index < 0) continue;
+                hidden = entry.Value[index];
+                entry.Value.RemoveAt(index);
+                if (entry.Value.Count == 0) HiddenWindows.Remove(entry.Key);
+                break;
+            }
+        }
+
+        if (hidden is not null && IsWindow(hidden.Handle))
+        {
+            ShowWindowAsync(hidden.Handle, SwRestore);
+            SetForegroundWindow(hidden.Handle);
+        }
+    }
+
+    public static void RestoreAllHiddenWindows()
+    {
+        List<HiddenWindow> hidden;
+        lock (HiddenWindowsLock)
+        {
+            hidden = HiddenWindows.Values.SelectMany(windows => windows).ToList();
+            HiddenWindows.Clear();
+        }
+        RestoreWindows(hidden, activateFirst: true);
+    }
+
+    private static List<HiddenWindow> TakeHiddenWindows(Guid entryId)
+    {
+        lock (HiddenWindowsLock)
+        {
+            if (!HiddenWindows.Remove(entryId, out var windows)) return [];
+            return windows;
+        }
+    }
+
+    private static void HideWindowsInTray(LauncherEntry entry, IEnumerable<IntPtr> windows)
+    {
+        var hidden = windows.Where(IsWindow).Distinct()
+            .Select(handle => new HiddenWindow(entry.Id, entry.Name, GetWindowCaption(handle), handle))
+            .ToList();
+        foreach (var window in hidden) ShowWindowAsync(window.Handle, SwHide);
+        if (hidden.Count == 0) return;
+
+        lock (HiddenWindowsLock)
+        {
+            if (!HiddenWindows.TryGetValue(entry.Id, out var current)) HiddenWindows[entry.Id] = current = [];
+            foreach (var window in hidden)
+                if (current.All(existing => existing.Handle != window.Handle)) current.Add(window);
+        }
+    }
+
+    private static void RestoreWindows(IEnumerable<HiddenWindow> windows, bool activateFirst)
+    {
+        var ordered = windows.Where(window => IsWindow(window.Handle)).ToArray();
+        foreach (var window in ordered) ShowWindowAsync(window.Handle, SwRestore);
+        if (activateFirst && ordered.Length > 0) SetForegroundWindow(ordered[0].Handle);
     }
 
     private static bool MatchesStoreAppChild(IntPtr topLevelWindow, string appUserModelId)
@@ -223,6 +323,7 @@ public static class WindowActionService
     [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool EnumWindows(EnumWindowsCallback callback, IntPtr lParam);
     [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool EnumChildWindows(IntPtr hWndParent, EnumWindowsCallback callback, IntPtr lParam);
     [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool IsWindowVisible(IntPtr hWnd);
+    [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool IsWindow(IntPtr hWnd);
     [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool IsIconic(IntPtr hWnd);
     [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool SetForegroundWindow(IntPtr hWnd);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetWindowText(IntPtr hWnd, System.Text.StringBuilder text, int maxCount);

@@ -24,7 +24,7 @@ Run `src\QuickMacro\bin\Release\net8.0-windows\QuickMacro.exe`. The configuratio
 
 1. Select **Add application**, then choose a target type: desktop app or shortcut, Microsoft Store app, website link, or browser-installed app. Website links accept `http://` and `https://` addresses and open in the default browser. Browser-installed apps are discovered from Start Menu and Desktop shortcuts for Brave, Chrome, and Edge, and can be searched by name. Arguments and a working folder are available for desktop targets.
 2. Select **Set shortcut** and press a key chord with Ctrl, Alt, or Shift. To include the Windows key, select its checkbox before recording the remaining key. A shortcut can also be cleared.
-3. Choose what the shortcut does: always launch a new instance, cycle between launch, minimize, and restore/bring-to-front, or launch/request close if the app is already open.
+3. Choose what the shortcut does: always launch a new instance, cycle between launch, minimize, and restore/bring-to-front, or launch/request close if the app is already open. For the minimize/restore action, select **Hide app in QuickMacro’s tray when minimized** to remove that app’s window from the taskbar; restore it from QuickMacro’s tray icon or with the same shortcut. QuickMacro restores these hidden windows when it exits.
 4. Save. Enabled entries register their shortcuts immediately. A Windows conflict appears as a tray warning; change that shortcut in the editor.
 5. Closing the window hides it in the tray by default. Use the tray menu to reopen, toggle all shortcuts, reload the JSON file, change settings, or exit.
 

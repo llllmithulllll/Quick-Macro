@@ -36,6 +36,10 @@ public sealed class MainForm : Form
         BuildUi();
         var menu = new ContextMenuStrip();
         menu.Items.Add("Open QuickMacro", null, (_, _) => ShowWindow());
+        var hiddenWindows = new ToolStripMenuItem("Hidden apps");
+        hiddenWindows.DropDownOpening += (_, _) => RefreshHiddenWindowsMenu(hiddenWindows);
+        menu.Items.Add(hiddenWindows);
+        menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Enable/disable all shortcuts", null, (_, _) => ToggleAll());
         menu.Items.Add("Reload configuration", null, (_, _) => Reload());
         menu.Items.Add("Settings", null, (_, _) => OpenSettings());
@@ -142,7 +146,7 @@ public sealed class MainForm : Form
         appInfo.Controls.Add(target); appInfo.Controls.Add(appName);
 
         var shortcut = new Label { Text = entry.Shortcut?.ToString() ?? "NO SHORTCUT", AutoEllipsis = true, TextAlign = ContentAlignment.MiddleCenter, Dock = DockStyle.Fill, Margin = new Padding(7, 19, 7, 19), Padding = new Padding(6, 0, 6, 0), BackColor = Color.FromArgb(25, 44, 69), ForeColor = entry.Shortcut is null ? TextMuted : Color.FromArgb(143, 199, 255), Font = new Font("Segoe UI Semibold", 9F) };
-        var actionText = entry.ShortcutAction switch { ShortcutAction.Minimize => "MINIMIZE", ShortcutAction.Close => "CLOSE", _ => "LAUNCH" };
+        var actionText = entry.ShortcutAction switch { ShortcutAction.Minimize when entry.MinimizeToSystemTray => "MINIMIZE TO TRAY", ShortcutAction.Minimize => "MINIMIZE", ShortcutAction.Close => "CLOSE", _ => "LAUNCH" };
         var action = new Label { Text = actionText, TextAlign = ContentAlignment.MiddleCenter, Dock = DockStyle.Fill, ForeColor = TextMuted, Font = new Font("Segoe UI Semibold", 8F), Margin = new Padding(4) };
 
         var commands = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft, WrapContents = false, BackColor = Surface, Padding = new Padding(0, 22, 0, 0) };
@@ -259,8 +263,30 @@ public sealed class MainForm : Form
     }
 
     private void ShowWindow() { Show(); WindowState = FormWindowState.Normal; Activate(); }
+    private void RefreshHiddenWindowsMenu(ToolStripMenuItem menu)
+    {
+        menu.DropDownItems.Clear();
+        var hiddenWindows = WindowActionService.GetHiddenWindows();
+        if (hiddenWindows.Count == 0)
+        {
+            menu.DropDownItems.Add("No hidden apps").Enabled = false;
+            return;
+        }
+
+        foreach (var hidden in hiddenWindows)
+        {
+            var label = string.IsNullOrWhiteSpace(hidden.WindowTitle)
+                || string.Equals(hidden.WindowTitle, hidden.EntryName, StringComparison.CurrentCultureIgnoreCase)
+                ? hidden.EntryName
+                : $"{hidden.EntryName} — {hidden.WindowTitle}";
+            var item = new ToolStripMenuItem(label);
+            item.Click += (_, _) => WindowActionService.RestoreHiddenWindow(hidden.Handle);
+            menu.DropDownItems.Add(item);
+        }
+    }
+
     private void ExitApp() { _allowExit = true; Close(); }
     protected override void WndProc(ref Message message) { if (_hotkeys.HandleMessage(ref message)) return; base.WndProc(ref message); }
     protected override void OnFormClosing(FormClosingEventArgs e) { if (!_allowExit && _config.Settings.MinimizeToTray && e.CloseReason == CloseReason.UserClosing) { e.Cancel = true; Hide(); } base.OnFormClosing(e); }
-    protected override void OnFormClosed(FormClosedEventArgs e) { _hotkeys.Dispose(); _tray.Visible = false; _tray.Dispose(); base.OnFormClosed(e); }
+    protected override void OnFormClosed(FormClosedEventArgs e) { WindowActionService.RestoreAllHiddenWindows(); _hotkeys.Dispose(); _tray.Visible = false; _tray.Dispose(); base.OnFormClosed(e); }
 }
