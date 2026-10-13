@@ -45,9 +45,15 @@ jobs:
         shell: pwsh
         run: Copy-Item artifacts/release/QuickMacro.exe "artifacts/QuickMacro-${{ github.ref_name }}-win-x64.exe"
 
+      - name: Create ZIP containing the executable
+        shell: pwsh
+        run: Compress-Archive -Path artifacts/release/QuickMacro.exe -DestinationPath "artifacts/QuickMacro-${{ github.ref_name }}-win-x64.zip" -Force
+
       - name: Create GitHub release and attach executable
         uses: softprops/action-gh-release@v2
         with:
           name: QuickMacro ${{ github.ref_name }}
           generate_release_notes: true
-          files: artifacts/QuickMacro-${{ github.ref_name }}-win-x64.exe
+          files: |
+            artifacts/QuickMacro-${{ github.ref_name }}-win-x64.exe
+            artifacts/QuickMacro-${{ github.ref_name }}-win-x64.zip
