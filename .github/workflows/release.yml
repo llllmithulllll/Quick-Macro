@@ -54,6 +54,7 @@ jobs:
         with:
           name: QuickMacro ${{ github.ref_name }}
           generate_release_notes: true
+          prerelease: ${{ contains(github.ref_name, '-beta') }}
           files: |
             artifacts/QuickMacro-${{ github.ref_name }}-win-x64.exe
             artifacts/QuickMacro-${{ github.ref_name }}-win-x64.zip

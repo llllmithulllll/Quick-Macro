@@ -42,7 +42,7 @@ From a Windows machine with the .NET 8 SDK, run `packaging\Publish-Windows.ps1`.
 
 ### GitHub releases
 
-Pushing a version tag such as `v1.0.0` starts the Windows release workflow. It restores, builds, and tests the solution, publishes a self-contained x64 executable, and attaches both `QuickMacro-v1.0.0-win-x64.exe` and `QuickMacro-v1.0.0-win-x64.zip` (containing `QuickMacro.exe`) to the GitHub Release. To publish a release after pushing your changes to GitHub, run:
+Pushing a version tag such as `v1.0.0` starts the Windows release workflow. It restores, builds, and tests the solution, publishes a self-contained x64 executable, and attaches both `QuickMacro-v1.0.0-win-x64.exe` and `QuickMacro-v1.0.0-win-x64.zip` (containing `QuickMacro.exe`) to the GitHub Release. Tags containing `-beta` are marked as prereleases. To publish a release after pushing your changes to GitHub, run:
 
 ```powershell
 git tag v1.0.0
