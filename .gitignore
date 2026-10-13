@@ -1,0 +1,15 @@
+# Build outputs and local tooling state
+**/bin/
+**/obj/
+/artifacts/
+.vs/
+.vscode/
+.idea/
+TestResults/
+*.user
+*.suo
+*.cache
+
+# Local project mirror material and workspace instructions
+/sources/
+/AGENTS.md

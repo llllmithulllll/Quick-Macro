@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>QuickMacro</AssemblyName>
+    <RootNamespace>QuickMacro</RootNamespace>
+    <Version>1.0.0</Version>
+    <Product>QuickMacro</Product>
+    <Company>QuickMacro</Company>
+    <Description>Lightweight global shortcut application launcher</Description>
+    <ApplicationIcon>quickmacro.ico</ApplicationIcon>
+  </PropertyGroup>
+</Project>
