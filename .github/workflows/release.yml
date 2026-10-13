@@ -31,15 +31,18 @@ jobs:
 
       - name: Publish self-contained x64 executable
         shell: pwsh
-        run: >-
-          dotnet publish src/QuickMacro/QuickMacro.csproj
-          --configuration Release
-          --runtime win-x64
-          --self-contained true
-          -p:PublishSingleFile=true
-          -p:IncludeNativeLibrariesForSelfExtract=true
-          -p:EnableCompressionInSingleFile=true
-          --output artifacts/release
+        run: |
+          $version = "${{ github.ref_name }}".TrimStart('v')
+          dotnet publish src/QuickMacro/QuickMacro.csproj `
+            --configuration Release `
+            --runtime win-x64 `
+            --self-contained true `
+            "-p:Version=$version" `
+            "-p:InformationalVersion=$version" `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:EnableCompressionInSingleFile=true `
+            --output artifacts/release
 
       - name: Name release asset
         shell: pwsh
