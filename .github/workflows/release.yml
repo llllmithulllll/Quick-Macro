@@ -27,7 +27,7 @@ jobs:
         run: dotnet build QuickMacro.sln --configuration Release --no-restore
 
       - name: Run tests
-        run: dotnet test QuickMacro.sln --configuration Release --no-build
+        run: dotnet test tests/QuickMacro.Tests/QuickMacro.Tests.csproj --configuration Release --no-build --no-restore
 
       - name: Publish self-contained WinUI 3 x64 app
         shell: pwsh
