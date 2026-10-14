@@ -29,35 +29,26 @@ jobs:
       - name: Run tests
         run: dotnet test QuickMacro.sln --configuration Release --no-build
 
-      - name: Publish self-contained x64 executable
+      - name: Publish self-contained WinUI 3 x64 app
         shell: pwsh
         run: |
           $version = "${{ github.ref_name }}".TrimStart('v')
-          dotnet publish src/QuickMacro/QuickMacro.csproj `
+          dotnet publish src/QuickMacro.WinUI/QuickMacro.WinUI.csproj `
             --configuration Release `
             --runtime win-x64 `
             --self-contained true `
             "-p:Version=$version" `
             "-p:InformationalVersion=$version" `
-            -p:PublishSingleFile=true `
-            -p:IncludeNativeLibrariesForSelfExtract=true `
-            -p:EnableCompressionInSingleFile=true `
             --output artifacts/release
 
-      - name: Name release asset
+      - name: Create ZIP containing the complete app
         shell: pwsh
-        run: Copy-Item artifacts/release/QuickMacro.exe "artifacts/QuickMacro-${{ github.ref_name }}-win-x64.exe"
-
-      - name: Create ZIP containing the executable
-        shell: pwsh
-        run: Compress-Archive -Path artifacts/release/QuickMacro.exe -DestinationPath "artifacts/QuickMacro-${{ github.ref_name }}-win-x64.zip" -Force
+        run: Compress-Archive -Path artifacts/release/* -DestinationPath "artifacts/QuickMacro-${{ github.ref_name }}-win-x64.zip" -Force
 
       - name: Create GitHub release and attach executable
         uses: softprops/action-gh-release@v2
         with:
           name: QuickMacro ${{ github.ref_name }}
-          generate_release_notes: true
+          body_path: CHANGELOG.md
           prerelease: ${{ contains(github.ref_name, '-beta') }}
-          files: |
-            artifacts/QuickMacro-${{ github.ref_name }}-win-x64.exe
-            artifacts/QuickMacro-${{ github.ref_name }}-win-x64.zip
+          files: artifacts/QuickMacro-${{ github.ref_name }}-win-x64.zip

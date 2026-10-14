@@ -1,26 +1,29 @@
 # QuickMacro
 
-QuickMacro is a small Windows tray application for launching applications with global keyboard shortcuts. It uses the Windows `RegisterHotKey` API and launches only targets that the user adds. It does not install a keyboard hook or driver, collect telemetry, or contact a service.
+QuickMacro is a Windows 11-style tray application for launching apps, websites, and workspaces with global keyboard shortcuts. The primary app is the WinUI 3 version. The original WinForms app remains available as a legacy build. Both use the Windows `RegisterHotKey` API and launch only targets added by the user.
 
 ## Requirements
 
 - Windows 10 or 11, x64
 - .NET 8 SDK to build from source (end users do not need .NET when using the self-contained publish)
-- Visual Studio 2022 with the .NET desktop development workload, or the .NET CLI
+- .NET 8 SDK and Windows App SDK NuGet packages
+- Windows SDK build tools (Visual Studio is optional; the WinUI workload provides an integrated development setup)
 
 ## Build and run
 
-Open `QuickMacro.sln` in Visual Studio, select Release, and build. Or run:
+Build the primary WinUI 3 app directly (x64):
 
 ```powershell
-dotnet restore .\QuickMacro.sln
-dotnet build .\QuickMacro.sln -c Release
-dotnet test .\QuickMacro.sln -c Release
+dotnet restore .\src\QuickMacro.WinUI\QuickMacro.WinUI.csproj
+dotnet build .\src\QuickMacro.WinUI\QuickMacro.WinUI.csproj -c Release -p:Platform=x64
+dotnet test .\tests\QuickMacro.Tests\QuickMacro.Tests.csproj -c Release
 ```
 
-Run `src\QuickMacro\bin\Release\net8.0-windows\QuickMacro.exe`. The configuration is stored at `%LOCALAPPDATA%\QuickMacro\config.json` and includes `config.json.bak` after subsequent saves.
+Run the WinUI 3 main app from source with `dotnet run --project .\src\QuickMacro.WinUI\QuickMacro.WinUI.csproj`. To create the self-contained x64 app folder, run `dotnet publish .\src\QuickMacro.WinUI\QuickMacro.WinUI.csproj -c Release -r win-x64 --self-contained true`. Launch `QuickMacro.exe` from the publish folder and keep its companion files beside it. The legacy WinForms app is built as `QuickMacro.Legacy.exe`. Configuration is stored at `%LOCALAPPDATA%\QuickMacro\config.json`.
 
 ## Use
+
+The main application is WinUI 3. See [README-WinUI.md](README-WinUI.md) for build instructions and [screenshots](README-WinUI.md#screenshots). Release history is in [CHANGELOG.md](CHANGELOG.md).
 
 1. Select **Add application**, then choose a target type: desktop app or shortcut, Microsoft Store app, website link, or browser-installed app. Website links accept `http://` and `https://` addresses and open in the default browser. Browser-installed apps are discovered from Start Menu and Desktop shortcuts for Brave, Chrome, and Edge, and can be searched by name. Arguments and a working folder are available for desktop targets.
 2. Select **Workspaces** to create layouts for apps you use together. Add already-configured apps, pick apps discovered in the Start Menu, Desktop, or Store, or browse to an executable or shortcut. Workspace-only apps are saved inside the workspace and do not need a separate global hotkey. Drag and resize windows in the desktop preview and assign the workspace a shortcut. Pressing it opens missing apps and arranges their windows; matching apps that are already open are reused. Website links are not offered because QuickMacro cannot reliably identify which browser window belongs to a particular link.
@@ -43,14 +46,7 @@ From a Windows machine with the .NET 8 SDK, run `packaging\Publish-Windows.ps1`.
 
 ### GitHub releases
 
-Pushing a version tag such as `v1.0.0` starts the Windows release workflow. It restores, builds, and tests the solution, publishes a self-contained x64 executable, and attaches both `QuickMacro-v1.0.0-win-x64.exe` and `QuickMacro-v1.0.0-win-x64.zip` (containing `QuickMacro.exe`) to the GitHub Release. Tags containing `-beta` are marked as prereleases. To publish a release after pushing your changes to GitHub, run:
-
-```powershell
-git tag v1.0.0
-git push origin v1.0.0
-```
-
-Replace `v1.0.0` with the next version. The workflow requires GitHub Actions to be enabled for the repository. The uploaded executable is unsigned; SmartScreen may show a warning.
+Pushing a version tag such as `v1.0.0-beta.3` starts the Windows release workflow. It restores, builds, and tests the solution, then publishes the WinUI 3 application as a self-contained x64 app folder and attaches a ZIP containing the full folder to the GitHub Release. Tags containing `-beta` are marked as prereleases. See [CHANGELOG.md](CHANGELOG.md) for release notes. GitHub Actions must be enabled for the repository. The package is unsigned; SmartScreen may show a warning.
 
 The installer is unsigned unless a maintainer signs the executable and setup package with an appropriate certificate. Windows SmartScreen may show a warning for unsigned builds. This repository does not include a signing certificate.
 
@@ -61,6 +57,7 @@ The installer is unsigned unless a maintainer signs the executable and setup pac
 - `LauncherService` and `WindowActionService`: shell execution plus per-shortcut launch, minimize, or graceful close actions.
 - `StartupService`: current-user Run registration.
 - `MainForm`, `EntryDialog`, `SettingsDialog`: tray-first Windows Forms interface.
+- `src/QuickMacro.WinUI`: primary WinUI 3 application and interactive workspace editor.
 - `QuickMacro.Tests`: shortcut, entry, action persistence, serialization, and malformed-configuration tests.
 
 Shortcut conflicts can occur with Windows or another application; failed registrations are skipped without terminating QuickMacro. Target existence is checked immediately before launch. Duplicate launch prevention tracks processes started by this QuickMacro session; it does not search for pre-existing processes started elsewhere. Store app activation is delegated to Windows Explorer, so duplicate prevention cannot reliably track a Store app's lifetime. For `.lnk` targets Windows shell execution handles shortcut resolution. Because shell-executed processes can be detached, duplicate prevention is best suited to ordinary executables.

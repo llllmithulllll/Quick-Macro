@@ -6,7 +6,7 @@
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <AssemblyName>QuickMacro</AssemblyName>
+    <AssemblyName>QuickMacro.Legacy</AssemblyName>
     <RootNamespace>QuickMacro</RootNamespace>
     <Version>1.0.0</Version>
     <Product>QuickMacro</Product>
