@@ -5,13 +5,14 @@ namespace QuickMacro.UI;
 
 public sealed class EntryDialog : Form
 {
-    private static readonly Color Raised = Color.FromArgb(26, 38, 58);
-    private static readonly Color Accent = Color.FromArgb(79, 153, 255);
+    private static readonly Color Raised = Color.FromArgb(237, 241, 247);
+    private static readonly Color Accent = Color.FromArgb(48, 105, 220);
     private readonly TextBox _name = new(), _path = new(), _args = new(), _working = new();
     private readonly ComboBox _targetKind = new() { DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill };
+    private readonly Label _typeDescription = new() { Dock = DockStyle.Fill, ForeColor = Color.FromArgb(96, 111, 132), TextAlign = ContentAlignment.MiddleLeft };
     private readonly Button _chooseTarget = new() { Text = "Browse…", AutoSize = true };
     private readonly CheckBox _enabled = new() { Text = "Enabled", Checked = true, AutoSize = true };
-    private readonly Label _shortcutLabel = new() { AutoSize = true, ForeColor = Color.White };
+    private readonly Label _shortcutLabel = new() { AutoSize = true, ForeColor = Color.FromArgb(25, 35, 52) };
     private readonly CheckBox _windowsModifier = new() { Text = "Windows key", AutoSize = true };
     private readonly ComboBox _shortcutAction = new() { DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill };
     private readonly CheckBox _minimizeToTray = new() { Text = "Hide app in QuickMacro’s tray when minimized", AutoSize = true };
@@ -23,41 +24,45 @@ public sealed class EntryDialog : Form
     public EntryDialog(LauncherEntry? entry)
     {
         _id = entry?.Id ?? Guid.NewGuid(); _shortcut = entry?.Shortcut;
-        Text = entry is null ? "Add application or website" : "Edit shortcut"; Width = 700; Height = 570; MinimumSize = new Size(650, 520); FormBorderStyle = FormBorderStyle.Sizable; StartPosition = FormStartPosition.CenterParent; MaximizeBox = false; MinimizeBox = false; BackColor = Color.FromArgb(13, 18, 30); ForeColor = Color.FromArgb(237, 242, 250); Font = new Font("Segoe UI", 9F); KeyPreview = true;
-        var table = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(14), ColumnCount = 4, RowCount = 10, BackColor = this.BackColor };
-        foreach (var height in new[] { 38, 38, 40, 38, 38, 54, 44, 34, 34, 46 }) table.RowStyles.Add(new RowStyle(SizeType.Absolute, height));
+        Text = entry is null ? "Add a shortcut" : "Edit shortcut"; DialogLayout.FitToWorkingArea(this, new Size(760, 650), new Size(700, 600)); FormBorderStyle = FormBorderStyle.Sizable; StartPosition = FormStartPosition.CenterParent; MaximizeBox = false; MinimizeBox = false; BackColor = Color.FromArgb(246, 248, 252); ForeColor = Color.FromArgb(25, 35, 52); Font = new Font("Segoe UI", 9F); KeyPreview = true;
+        var table = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(22), ColumnCount = 4, RowCount = 12, BackColor = this.BackColor };
+        foreach (var height in new[] { 32, 42, 38, 28, 40, 38, 38, 54, 44, 36, 34, 50 }) table.RowStyles.Add(new RowStyle(SizeType.Absolute, height));
         table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 126)); table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96)); table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96));
 
-        AddRow(table, 0, "Name", _name);
-        table.Controls.Add(new Label { Text = "Add type", AutoSize = true, Anchor = AnchorStyles.Left }, 0, 1);
-        _targetKind.Items.AddRange(["Desktop app or shortcut", "Microsoft Store app", "Website link", "Browser-installed app"]);
+        var intro = new Label { Text = "Choose what the shortcut should open, then set how the hotkey behaves.", Dock = DockStyle.Fill, ForeColor = Color.FromArgb(96, 111, 132), TextAlign = ContentAlignment.MiddleLeft };
+        table.Controls.Add(intro, 0, 0); table.SetColumnSpan(intro, 4);
+        AddRow(table, 1, "Name", _name);
+        table.Controls.Add(new Label { Text = "Opens", AutoSize = true, Anchor = AnchorStyles.Left }, 0, 2);
+        _targetKind.Items.AddRange(Enum.GetValues<LauncherTargetType>().Select(LauncherTargetTypeLabels.Get).Cast<object>().ToArray());
+        _targetKind.BackColor = Raised; _targetKind.ForeColor = Color.FromArgb(25, 35, 52); _targetKind.FlatStyle = FlatStyle.Flat;
         _targetKind.SelectedIndex = (int)(entry?.TargetType ?? LauncherTargetType.FilePath);
-        table.Controls.Add(_targetKind, 1, 1); table.SetColumnSpan(_targetKind, 3);
-        AddRow(table, 2, "Target", _path);
+        table.Controls.Add(_targetKind, 1, 2); table.SetColumnSpan(_targetKind, 3);
+        table.Controls.Add(_typeDescription, 1, 3); table.SetColumnSpan(_typeDescription, 3);
+        AddRow(table, 4, "Target", _path);
         _chooseTarget = StyleButton(_chooseTarget);
-        table.Controls.Add(_chooseTarget, 2, 2); table.SetColumnSpan(_chooseTarget, 2);
-        AddRow(table, 3, "Arguments", _args);
-        AddRow(table, 4, "Working folder", _working, BrowseDirectory);
+        table.Controls.Add(_chooseTarget, 2, 4); table.SetColumnSpan(_chooseTarget, 2);
+        AddRow(table, 5, "Arguments", _args);
+        AddRow(table, 6, "Working folder", _working, BrowseDirectory);
 
-        table.Controls.Add(new Label { Text = "Global shortcut", AutoSize = true, Anchor = AnchorStyles.Left }, 0, 5);
+        table.Controls.Add(new Label { Text = "Global shortcut", AutoSize = true, Anchor = AnchorStyles.Left }, 0, 7);
         var shortcutPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, BackColor = this.BackColor };
         var record = StyleButton(new Button { Text = "Set shortcut", AutoSize = true }); record.Click += (_, _) => { _recording = true; _shortcutLabel.Text = "Press a key combination"; Focus(); };
         var clear = StyleButton(new Button { Text = "Clear", AutoSize = true }); clear.Click += (_, _) => { _shortcut = null; _shortcutLabel.Text = "Not set"; };
-        shortcutPanel.Controls.Add(record); shortcutPanel.Controls.Add(clear); shortcutPanel.Controls.Add(_shortcutLabel); shortcutPanel.Controls.Add(_windowsModifier); table.Controls.Add(shortcutPanel, 1, 5); table.SetColumnSpan(shortcutPanel, 3);
+        shortcutPanel.Controls.Add(record); shortcutPanel.Controls.Add(clear); shortcutPanel.Controls.Add(_shortcutLabel); shortcutPanel.Controls.Add(_windowsModifier); table.Controls.Add(shortcutPanel, 1, 7); table.SetColumnSpan(shortcutPanel, 3);
 
         _shortcutAction.Items.AddRange(["Always launch a new instance", "Launch / minimize / restore", "Launch, or close if open"]);
-        _shortcutAction.BackColor = Raised; _shortcutAction.ForeColor = Color.FromArgb(237, 242, 250); _shortcutAction.FlatStyle = FlatStyle.Flat;
-        table.Controls.Add(new Label { Text = "When shortcut is pressed", AutoSize = true, Anchor = AnchorStyles.Left }, 0, 6);
-        table.Controls.Add(_shortcutAction, 1, 6); table.SetColumnSpan(_shortcutAction, 3);
-        _minimizeToTray.ForeColor = Color.FromArgb(237, 242, 250);
-        table.Controls.Add(_minimizeToTray, 1, 7); table.SetColumnSpan(_minimizeToTray, 3);
-        table.Controls.Add(_enabled, 1, 8);
+        _shortcutAction.BackColor = Raised; _shortcutAction.ForeColor = Color.FromArgb(25, 35, 52); _shortcutAction.FlatStyle = FlatStyle.Flat;
+        table.Controls.Add(new Label { Text = "Hotkey action", AutoSize = true, Anchor = AnchorStyles.Left }, 0, 8);
+        table.Controls.Add(_shortcutAction, 1, 8); table.SetColumnSpan(_shortcutAction, 3);
+        _minimizeToTray.ForeColor = Color.FromArgb(25, 35, 52);
+        table.Controls.Add(_minimizeToTray, 1, 9); table.SetColumnSpan(_minimizeToTray, 3);
+        table.Controls.Add(_enabled, 1, 10);
         var actions = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft, BackColor = this.BackColor };
-        var save = StyleButton(new Button { Text = "Save", AutoSize = true }, true); save.Click += (_, _) => SaveEntry(); var cancel = StyleButton(new Button { Text = "Cancel", AutoSize = true, DialogResult = DialogResult.Cancel }); actions.Controls.Add(save); actions.Controls.Add(cancel); table.Controls.Add(actions, 0, 9); table.SetColumnSpan(actions, 4);
+        var save = StyleButton(new Button { Text = "Save shortcut", AutoSize = true }, true); save.Click += (_, _) => SaveEntry(); var cancel = StyleButton(new Button { Text = "Cancel", AutoSize = true, DialogResult = DialogResult.Cancel }); actions.Controls.Add(save); actions.Controls.Add(cancel); table.Controls.Add(actions, 0, 11); table.SetColumnSpan(actions, 4);
         Controls.Add(table); AcceptButton = save; CancelButton = cancel;
 
-        foreach (var textBox in new[] { _name, _path, _args, _working }) { textBox.BackColor = Raised; textBox.ForeColor = Color.FromArgb(237, 242, 250); textBox.BorderStyle = BorderStyle.FixedSingle; }
-        _enabled.ForeColor = Color.FromArgb(237, 242, 250); _windowsModifier.ForeColor = Color.FromArgb(237, 242, 250);
+        foreach (var textBox in new[] { _name, _path, _args, _working }) { textBox.BackColor = Raised; textBox.ForeColor = Color.FromArgb(25, 35, 52); textBox.BorderStyle = BorderStyle.FixedSingle; }
+        _enabled.ForeColor = Color.FromArgb(25, 35, 52); _windowsModifier.ForeColor = Color.FromArgb(25, 35, 52);
         var actionIndex = (int)(entry?.ShortcutAction ?? ShortcutAction.Launch);
         _shortcutAction.SelectedIndex = actionIndex >= 0 && actionIndex < _shortcutAction.Items.Count ? actionIndex : 0;
         if (entry is not null) { _name.Text = entry.Name; _path.Text = entry.TargetPath; _args.Text = entry.Arguments; _working.Text = entry.WorkingDirectory; _enabled.Checked = entry.Enabled; _windowsModifier.Checked = entry.Shortcut?.Windows ?? false; _minimizeToTray.Checked = entry.MinimizeToSystemTray; }
@@ -71,7 +76,7 @@ public sealed class EntryDialog : Form
     private static Button StyleButton(Button button, bool primary = false)
     {
         button.FlatStyle = FlatStyle.Flat; button.FlatAppearance.BorderSize = 0; button.BackColor = primary ? Accent : Raised;
-        button.ForeColor = Color.FromArgb(237, 242, 250); button.Font = new Font("Segoe UI Semibold", 9F); button.Padding = new Padding(8, 4, 8, 4); button.Cursor = Cursors.Hand;
+        button.ForeColor = primary ? Color.White : Color.FromArgb(25, 35, 52); button.Font = new Font("Segoe UI Semibold", 9F); button.Padding = new Padding(8, 4, 8, 4); button.Cursor = Cursors.Hand;
         return button;
     }
 
@@ -87,6 +92,14 @@ public sealed class EntryDialog : Form
     private void UpdateTargetControls()
     {
         var type = SelectedTargetType;
+        _typeDescription.Text = type switch
+        {
+            LauncherTargetType.FilePath => "Choose a Windows program or shortcut file on this PC.",
+            LauncherTargetType.StoreApp => "Select an installed Microsoft Store app by its Windows app identity.",
+            LauncherTargetType.WebsiteUrl => "Enter a web address; QuickMacro opens it in your default browser.",
+            LauncherTargetType.BrowserAppShortcut => "Choose an app shortcut installed by Chrome, Edge, or Brave.",
+            _ => string.Empty
+        };
         _chooseTarget.Enabled = type != LauncherTargetType.WebsiteUrl;
         _chooseTarget.Text = type switch
         {

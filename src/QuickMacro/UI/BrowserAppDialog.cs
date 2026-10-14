@@ -4,24 +4,24 @@ namespace QuickMacro.UI;
 
 public sealed class BrowserAppDialog : Form
 {
-    private static readonly Color Surface = Color.FromArgb(19, 28, 44);
-    private static readonly Color Raised = Color.FromArgb(26, 38, 58);
+    private static readonly Color Surface = Color.FromArgb(255, 255, 255);
+    private static readonly Color Raised = Color.FromArgb(237, 241, 247);
     private readonly TextBox _search = new();
     private readonly ListBox _apps = new() { Dock = DockStyle.Fill, IntegralHeight = false };
-    private readonly Label _status = new() { AutoSize = true, ForeColor = Color.FromArgb(149, 164, 185), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft };
+    private readonly Label _status = new() { AutoSize = true, ForeColor = Color.FromArgb(96, 111, 132), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft };
     private List<BrowserAppChoice> _choices = [];
     public BrowserAppChoice? SelectedApp => _apps.SelectedItem as BrowserAppChoice;
 
     public BrowserAppDialog()
     {
-        Text = "Choose a browser-installed app"; Width = 550; Height = 540; MinimumSize = new Size(420, 360); StartPosition = FormStartPosition.CenterParent;
-        BackColor = Color.FromArgb(13, 18, 30); ForeColor = Color.FromArgb(237, 242, 250); Font = new Font("Segoe UI", 9F);
+        Text = "Choose a browser-installed app"; DialogLayout.FitToWorkingArea(this, new Size(550, 540), new Size(420, 360)); StartPosition = FormStartPosition.CenterParent;
+        BackColor = Color.FromArgb(246, 248, 252); ForeColor = Color.FromArgb(25, 35, 52); Font = new Font("Segoe UI", 9F);
         var layout = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(14), RowCount = 4, ColumnCount = 1, BackColor = BackColor };
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize)); layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36)); layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
-        layout.Controls.Add(new Label { Text = "Web apps found in your Start Menu and Desktop", AutoSize = true, Padding = new Padding(0, 0, 0, 10), ForeColor = Color.FromArgb(237, 242, 250) }, 0, 0);
-        _search.PlaceholderText = "Search web apps…"; _search.Dock = DockStyle.Fill; _search.BackColor = Raised; _search.ForeColor = Color.FromArgb(237, 242, 250); _search.BorderStyle = BorderStyle.FixedSingle;
+        layout.Controls.Add(new Label { Text = "Web apps found in your Start Menu and Desktop", AutoSize = true, Padding = new Padding(0, 0, 0, 10), ForeColor = Color.FromArgb(25, 35, 52) }, 0, 0);
+        _search.PlaceholderText = "Search web apps…"; _search.Dock = DockStyle.Fill; _search.BackColor = Raised; _search.ForeColor = Color.FromArgb(25, 35, 52); _search.BorderStyle = BorderStyle.FixedSingle;
         layout.Controls.Add(_search, 0, 1);
-        _apps.BackColor = Surface; _apps.ForeColor = Color.FromArgb(237, 242, 250); _apps.BorderStyle = BorderStyle.FixedSingle;
+        _apps.BackColor = Surface; _apps.ForeColor = Color.FromArgb(25, 35, 52); _apps.BorderStyle = BorderStyle.FixedSingle;
         layout.Controls.Add(_apps, 0, 2);
         var footer = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, BackColor = BackColor };
         footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); footer.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
@@ -39,8 +39,8 @@ public sealed class BrowserAppDialog : Form
 
     private static Button StyleButton(Button button, bool primary = false)
     {
-        button.FlatStyle = FlatStyle.Flat; button.FlatAppearance.BorderSize = 0; button.BackColor = primary ? Color.FromArgb(79, 153, 255) : Raised;
-        button.ForeColor = Color.FromArgb(237, 242, 250); button.Font = new Font("Segoe UI Semibold", 9F); button.Padding = new Padding(9, 5, 9, 5); button.Cursor = Cursors.Hand;
+        button.FlatStyle = FlatStyle.Flat; button.FlatAppearance.BorderSize = 0; button.BackColor = primary ? Color.FromArgb(48, 105, 220) : Raised;
+        button.ForeColor = primary ? Color.White : Color.FromArgb(25, 35, 52); button.Font = new Font("Segoe UI Semibold", 9F); button.Padding = new Padding(9, 5, 9, 5); button.Cursor = Cursors.Hand;
         return button;
     }
 

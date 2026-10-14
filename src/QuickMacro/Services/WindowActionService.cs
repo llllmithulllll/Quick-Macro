@@ -7,6 +7,76 @@ namespace QuickMacro.Services;
 public static class WindowActionService
 {
     public sealed record HiddenWindow(Guid EntryId, string EntryName, string WindowTitle, IntPtr Handle);
+    public sealed record WindowSnapshot(IntPtr Handle, Rectangle Bounds, string Title, bool IsMinimized);
+
+    public static IReadOnlyList<IntPtr> FindMatchingWindows(LauncherEntry entry)
+        => FindMatchingWindowSnapshots(entry).Select(snapshot => snapshot.Handle).ToArray();
+
+    public static IReadOnlyList<WindowSnapshot> FindMatchingWindowSnapshots(LauncherEntry entry)
+    {
+        if (entry.TargetType == LauncherTargetType.WebsiteUrl) return [];
+        var executablePath = entry.TargetType is LauncherTargetType.FilePath or LauncherTargetType.BrowserAppShortcut ? ResolveExecutablePath(entry.TargetPath) : null;
+        var shortcutAppId = entry.TargetType == LauncherTargetType.BrowserAppShortcut ? GetShortcutAppUserModelId(entry.TargetPath) : null;
+        var windows = new List<WindowSnapshot>();
+        EnumWindows((handle, _) =>
+        {
+            if (IsWindowVisible(handle) && (MatchesTarget(handle, entry, executablePath, shortcutAppId)
+                || entry.TargetType == LauncherTargetType.StoreApp && MatchesStoreAppChild(handle, entry.TargetPath)
+                || entry.TargetType == LauncherTargetType.BrowserAppShortcut && !string.IsNullOrWhiteSpace(shortcutAppId) && MatchesStoreAppChild(handle, shortcutAppId))
+                && GetWindowRect(handle, out var bounds))
+                windows.Add(new WindowSnapshot(handle, GetVisibleFrameBounds(handle, bounds), GetWindowCaption(handle), IsIconic(handle)));
+            return true;
+        }, IntPtr.Zero);
+        return windows.GroupBy(window => window.Handle).Select(group => group.First())
+            .OrderByDescending(window => !string.IsNullOrWhiteSpace(window.Title))
+            .ThenByDescending(window => window.Bounds.Width * (long)window.Bounds.Height)
+            .ToArray();
+    }
+
+    public static string? PlaceWindow(IntPtr handle, int xPercent, int yPercent, int widthPercent, int heightPercent)
+    {
+        if (!IsWindow(handle)) return "The app window closed before it could be arranged.";
+        var area = Screen.PrimaryScreen?.WorkingArea ?? Screen.FromHandle(handle).WorkingArea;
+        var width = Math.Max(240, (int)Math.Round(area.Width * Math.Clamp(widthPercent, 1, 100) / 100d));
+        var height = Math.Max(180, (int)Math.Round(area.Height * Math.Clamp(heightPercent, 1, 100) / 100d));
+        width = Math.Min(width, area.Width); height = Math.Min(height, area.Height);
+        var x = area.Left + Math.Min((int)Math.Round(area.Width * Math.Clamp(xPercent, 0, 99) / 100d), area.Width - width);
+        var y = area.Top + Math.Min((int)Math.Round(area.Height * Math.Clamp(yPercent, 0, 99) / 100d), area.Height - height);
+        ShowWindow(handle, SwRestore);
+        GetWindowRect(handle, out var outerBefore);
+        var visibleBefore = GetVisibleFrameBounds(handle, outerBefore);
+        // GetWindowRect includes invisible resize borders on modern Windows.
+        // Compensate so the visible frame aligns to the canvas cell and screen edge.
+        var leftInset = Math.Max(0, visibleBefore.Left - outerBefore.Left);
+        var topInset = Math.Max(0, visibleBefore.Top - outerBefore.Top);
+        var rightInset = Math.Max(0, outerBefore.Right - visibleBefore.Right);
+        var bottomInset = Math.Max(0, outerBefore.Bottom - visibleBefore.Bottom);
+        var setX = x - leftInset; var setY = y - topInset;
+        var setWidth = width + leftInset + rightInset; var setHeight = height + topInset + bottomInset;
+        if (!SetWindowPos(handle, IntPtr.Zero, setX, setY, setWidth, setHeight, 0x0014))
+        {
+            var error = Marshal.GetLastWin32Error();
+            return $"Windows could not move or resize this app (error {error}). Try running QuickMacro with the same permission level as the app.";
+        }
+        if (GetWindowRect(handle, out var actual))
+        {
+            var visibleActual = GetVisibleFrameBounds(handle, actual);
+            // Many apps (Discord included) enforce a minimum or fixed window size.
+            // Keep a window in its workspace when it accepts the position, even if
+            // its own sizing rules reject our requested dimensions.
+            if (Math.Abs(visibleActual.Left - x) > 12 || Math.Abs(visibleActual.Top - y) > 12)
+                return $"The app did not accept the requested window position. Windows reports its visible frame at {visibleActual.Left}, {visibleActual.Top} instead of {x}, {y}. Try running QuickMacro with the same permission level as the app.";
+        }
+        return null;
+    }
+
+    private static Rectangle GetVisibleFrameBounds(IntPtr handle, NativeRect fallback)
+    {
+        var result = DwmGetWindowAttribute(handle, 9, out var visible, Marshal.SizeOf<NativeRect>());
+        return result == 0 && visible.Right > visible.Left && visible.Bottom > visible.Top
+            ? Rectangle.FromLTRB(visible.Left, visible.Top, visible.Right, visible.Bottom)
+            : Rectangle.FromLTRB(fallback.Left, fallback.Top, fallback.Right, fallback.Bottom);
+    }
 
     private const int SwMinimize = 6;
     private const int SwHide = 0;
@@ -128,6 +198,12 @@ public static class WindowActionService
             HiddenWindows.Clear();
         }
         RestoreWindows(hidden, activateFirst: true);
+    }
+
+    public static void RestoreHiddenWindowsForEntry(Guid entryId)
+    {
+        var hidden = TakeHiddenWindows(entryId);
+        RestoreWindows(hidden, activateFirst: false);
     }
 
     private static List<HiddenWindow> TakeHiddenWindows(Guid entryId)
@@ -325,11 +401,15 @@ public static class WindowActionService
     [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool IsWindowVisible(IntPtr hWnd);
     [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool IsWindow(IntPtr hWnd);
     [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool IsIconic(IntPtr hWnd);
+    [DllImport("user32.dll", SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool GetWindowRect(IntPtr hWnd, out NativeRect rect);
     [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool SetForegroundWindow(IntPtr hWnd);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetWindowText(IntPtr hWnd, System.Text.StringBuilder text, int maxCount);
     [DllImport("user32.dll")] private static extern int GetWindowTextLength(IntPtr hWnd);
     [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
     [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool ShowWindowAsync(IntPtr hWnd, int nCmdShow);
+    [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+    [DllImport("user32.dll", SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool SetWindowPos(IntPtr hWnd, IntPtr insertAfter, int x, int y, int cx, int cy, uint flags);
+    [DllImport("dwmapi.dll")] private static extern int DwmGetWindowAttribute(IntPtr hwnd, int attribute, out NativeRect value, int size);
     [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool PostMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
     [DllImport("kernel32.dll", SetLastError = true)] private static extern SafeProcessHandle OpenProcess(uint desiredAccess, [MarshalAs(UnmanagedType.Bool)] bool inheritHandle, uint processId);
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool QueryFullProcessImageName(SafeProcessHandle process, uint flags, System.Text.StringBuilder imageName, ref uint size);
@@ -338,6 +418,9 @@ public static class WindowActionService
     [DllImport("ole32.dll")] private static extern int PropVariantClear(ref PropVariant propVariant);
 
     private delegate bool EnumWindowsCallback(IntPtr hWnd, IntPtr lParam);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativeRect { public int Left, Top, Right, Bottom; }
 
     private sealed class SafeProcessHandle : Microsoft.Win32.SafeHandles.SafeHandleZeroOrMinusOneIsInvalid
     {

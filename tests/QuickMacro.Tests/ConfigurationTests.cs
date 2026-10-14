@@ -18,6 +18,41 @@ public class ConfigurationTests
     }
 
     [Fact]
+    public void Workspaces_round_trip_with_shortcut_and_window_layout()
+    {
+        var workspace = new Workspace
+        {
+            Name = "Writing", Shortcut = new ShortcutBinding { Control = true, Alt = true, Key = Keys.W },
+            Items = [new WorkspaceItem { EntryId = Guid.NewGuid(), X = 0, Y = 0, Width = 60, Height = 100 }]
+        };
+        var config = new AppConfiguration { Workspaces = [workspace] };
+        var copy = System.Text.Json.JsonSerializer.Deserialize<AppConfiguration>(System.Text.Json.JsonSerializer.Serialize(config))!;
+        Assert.Equal(workspace.Name, copy.Workspaces.Single().Name);
+        Assert.Equal(workspace.Shortcut, copy.Workspaces.Single().Shortcut);
+        Assert.Equal((0, 0, 60, 100), (copy.Workspaces.Single().Items.Single().X, copy.Workspaces.Single().Items.Single().Y, copy.Workspaces.Single().Items.Single().Width, copy.Workspaces.Single().Items.Single().Height));
+    }
+
+    [Fact]
+    public void Workspace_can_own_an_app_without_a_global_hotkey_entry()
+    {
+        var workspace = new Workspace
+        {
+            Name = "Workspace-only app", Shortcut = new ShortcutBinding { Control = true, Alt = true, Key = Keys.B },
+            Items = [new WorkspaceItem { Target = new LauncherEntry { Name = "Standalone", TargetPath = @"C:\Tools\standalone.exe" }, X = 0, Y = 0, Width = 100, Height = 100 }]
+        };
+        var path = Path.Combine(Path.GetTempPath(), "QuickMacro.Tests", Guid.NewGuid().ToString("N")); Directory.CreateDirectory(path);
+        var backup = Path.Combine(path, "workspace.json");
+        try
+        {
+            File.WriteAllText(backup, System.Text.Json.JsonSerializer.Serialize(new AppConfiguration { Workspaces = [workspace] }));
+            var imported = new ConfigurationRepository().Import(backup)!;
+            Assert.Empty(imported.Entries);
+            Assert.Equal("Standalone", imported.Workspaces.Single().Items.Single().Target!.Name);
+        }
+        finally { Directory.Delete(path, true); }
+    }
+
+    [Fact]
     public void Legacy_configuration_is_migrated_to_current_schema()
     {
         var dir = Path.Combine(Path.GetTempPath(), "QuickMacro.Tests", Guid.NewGuid().ToString("N"));
@@ -51,6 +86,22 @@ public class ConfigurationTests
         {
             var shortcut = new ShortcutBinding { Control = true, Alt = true, Key = Keys.K };
             File.WriteAllText(file, System.Text.Json.JsonSerializer.Serialize(new AppConfiguration { Entries = [new LauncherEntry { Name = "A", TargetPath = "a.exe", Shortcut = shortcut }, new LauncherEntry { Name = "B", TargetPath = "b.exe", Shortcut = shortcut }] }));
+            Assert.Throws<InvalidDataException>(() => new ConfigurationRepository().Import(file));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void Import_rejects_shortcut_shared_by_app_and_workspace()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "QuickMacro.Tests", Guid.NewGuid().ToString("N")); Directory.CreateDirectory(dir);
+        var file = Path.Combine(dir, "backup.json");
+        try
+        {
+            var binding = new ShortcutBinding { Control = true, Alt = true, Key = Keys.P };
+            var entry = new LauncherEntry { Name = "Editor", TargetPath = @"C:\Apps\editor.exe", Shortcut = binding };
+            var workspace = new Workspace { Name = "Work", Shortcut = new ShortcutBinding { Control = true, Alt = true, Key = Keys.P }, Items = [new WorkspaceItem { EntryId = entry.Id }] };
+            File.WriteAllText(file, System.Text.Json.JsonSerializer.Serialize(new AppConfiguration { Entries = [entry], Workspaces = [workspace] }));
             Assert.Throws<InvalidDataException>(() => new ConfigurationRepository().Import(file));
         }
         finally { Directory.Delete(dir, true); }

@@ -9,7 +9,7 @@ public sealed class StoreAppDialog : Form
 
     public StoreAppDialog()
     {
-        Text = "Choose a Microsoft Store app"; Width = 460; Height = 500; MinimumSize = new Size(360, 300); StartPosition = FormStartPosition.CenterParent; BackColor = Color.FromArgb(34, 36, 43); ForeColor = Color.White;
+        Text = "Choose a Microsoft Store app"; DialogLayout.FitToWorkingArea(this, new Size(460, 500), new Size(360, 300)); StartPosition = FormStartPosition.CenterParent; BackColor = Color.FromArgb(246, 248, 252); ForeColor = Color.FromArgb(25, 35, 52);
         var layout = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(12), RowCount = 3, ColumnCount = 1 };
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize)); layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.Controls.Add(new Label { Text = "Installed Store apps", AutoSize = true, Padding = new Padding(0, 0, 0, 8) }, 0, 0);
@@ -17,6 +17,7 @@ public sealed class StoreAppDialog : Form
         var buttons = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft, AutoSize = true };
         var add = new Button { Text = "Choose", AutoSize = true }; add.Click += (_, _) => SelectApp();
         var cancel = new Button { Text = "Cancel", AutoSize = true, DialogResult = DialogResult.Cancel };
+        StyleButton(add, primary: true); StyleButton(cancel);
         buttons.Controls.Add(add); buttons.Controls.Add(cancel); layout.Controls.Add(buttons, 0, 2); Controls.Add(layout);
         AcceptButton = add; CancelButton = cancel;
         Shown += (_, _) => LoadApps();
@@ -47,5 +48,13 @@ public sealed class StoreAppDialog : Form
     {
         if (SelectedApp is null) return;
         DialogResult = DialogResult.OK; Close();
+    }
+
+    private static void StyleButton(Button button, bool primary = false)
+    {
+        button.FlatStyle = FlatStyle.Flat; button.FlatAppearance.BorderSize = 0;
+        button.BackColor = primary ? Color.FromArgb(48, 105, 220) : Color.FromArgb(237, 241, 247);
+        button.ForeColor = primary ? Color.White : Color.FromArgb(25, 35, 52);
+        button.Font = new Font("Segoe UI Semibold", 9F); button.Padding = new Padding(10, 5, 10, 5); button.Cursor = Cursors.Hand;
     }
 }
