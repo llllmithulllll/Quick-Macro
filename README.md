@@ -4,6 +4,16 @@ QuickMacro is a Windows 11-style tray application for launching apps, websites, 
 
 **Latest beta:** [v1.0.0-beta.4](https://github.com/llllmithulllll/Quick-Macro/releases/tag/v1.0.0-beta.4) · [Download the self-contained Windows x64 app](https://github.com/llllmithulllll/Quick-Macro/releases/download/v1.0.0-beta.4/QuickMacro-v1.0.0-beta.4-win-x64.zip)
 
+## Screenshots
+
+### Shortcuts
+
+![QuickMacro shortcuts screen](screenshots/quickmacro-shortcuts-overview.png)
+
+### Workspace editor
+
+![QuickMacro interactive workspace editor with visible resize handles](screenshots/quickmacro-workspace-editor.png)
+
 ## Requirements
 
 - Windows 10 or 11, x64
