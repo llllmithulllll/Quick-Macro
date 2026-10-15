@@ -365,6 +365,17 @@ public sealed partial class MainWindow : Microsoft.UI.Xaml.Window
     private async Task EditWorkspace(Workspace? original)
     {
         var name = new TextBox { Header = "Workspace name", Text = original?.Name ?? "" };
+        var openOnNewDesktop = new CheckBox { Content = "Open this workspace on a new Windows desktop", IsChecked = original?.OpenOnNewDesktop ?? false };
+        var repeatAction = new ComboBox { Header = "When shortcut is pressed again", Width = 320, SelectedIndex = (int)(original?.RepeatAction ?? WorkspaceRepeatAction.Launch) };
+        repeatAction.Items.Add("Launch / arrange again");
+        repeatAction.Items.Add("Minimize / restore apps");
+        repeatAction.Items.Add("Close workspace apps");
+        repeatAction.Items.Add("Close apps and this desktop");
+        void UpdateRepeatActionAvailability() => repeatAction.IsEnabled = openOnNewDesktop.IsChecked == true || repeatAction.SelectedIndex != (int)WorkspaceRepeatAction.CloseAppsAndDesktop;
+        openOnNewDesktop.Checked += (_, _) => UpdateRepeatActionAvailability();
+        openOnNewDesktop.Unchecked += (_, _) => UpdateRepeatActionAvailability();
+        repeatAction.SelectionChanged += (_, _) => UpdateRepeatActionAvailability();
+        UpdateRepeatActionAvailability();
         var shortcut = new TextBox { Header = "Global shortcut", Text = original?.Shortcut?.ToString() ?? "", IsReadOnly = true, PlaceholderText = "Click here, then press a shortcut" };
         ShortcutBinding? binding = original?.Shortcut;
         shortcut.KeyDown += (_, e) =>
@@ -500,6 +511,8 @@ public sealed partial class MainWindow : Microsoft.UI.Xaml.Window
         }
         var fields = new StackPanel { Spacing = 10 };
         fields.Children.Add(identityFields);
+        fields.Children.Add(openOnNewDesktop);
+        fields.Children.Add(repeatAction);
         fields.Children.Add(workspaceEditor);
         var workspaceDialogWidth = Math.Max(700, Math.Min(1500, Content.XamlRoot.Size.Width - 64));
         var dialog = new ContentDialog { Title = original is null ? "Create workspace" : "Edit workspace", Content = new ScrollViewer { Content = fields, MaxHeight = Math.Max(360, Content.XamlRoot.Size.Height - 130), VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled }, PrimaryButtonText = "Save workspace", CloseButtonText = "Cancel", DefaultButton = ContentDialogButton.Primary, FullSizeDesired = true, Width = workspaceDialogWidth, MaxWidth = workspaceDialogWidth, XamlRoot = Content.XamlRoot };
@@ -508,7 +521,7 @@ public sealed partial class MainWindow : Microsoft.UI.Xaml.Window
         var selected = appChecks.Children.OfType<CheckBox>().Where(box => box.IsChecked == true).Select(box => (WorkspaceItem)box.Tag).ToList();
         if (string.IsNullOrWhiteSpace(name.Text) || binding is null || selected.Count == 0) { await ShowMessage("Workspace incomplete", "Enter a name, set a shortcut, and select at least one app."); return; }
         if (App.Configuration.Entries.Any(entry => entry.Enabled && entry.Shortcut?.Equals(binding) == true && entry.Enabled)) { await ShowMessage("Shortcut already assigned", "Choose a shortcut not used by an app."); return; }
-        var workspace = original ?? new Workspace(); workspace.Name = name.Text.Trim(); workspace.Shortcut = binding; workspace.Enabled = true;
+        var workspace = original ?? new Workspace(); workspace.Name = name.Text.Trim(); workspace.Shortcut = binding; workspace.Enabled = true; workspace.OpenOnNewDesktop = openOnNewDesktop.IsChecked == true; workspace.RepeatAction = (WorkspaceRepeatAction)Math.Clamp(repeatAction.SelectedIndex, 0, 3);
         workspace.Items = selected.Select(item => new WorkspaceItem { EntryId = item.EntryId, Target = item.Target, X = item.X, Y = item.Y, Width = item.Width, Height = item.Height }).ToList();
         if (original is null) App.Configuration.Workspaces.Add(workspace);
         SaveConfiguration(); RefreshHotkeys(); ShowWorkspaces();
@@ -638,7 +651,13 @@ public sealed partial class MainWindow : Microsoft.UI.Xaml.Window
         var entry = App.Configuration.Entries.FirstOrDefault(value => value.Id == id);
         if (entry is not null) { _ = RunEntry(entry); return; }
         var workspace = App.Configuration.Workspaces.FirstOrDefault(value => value.Id == id);
-        if (workspace is not null) _ = RunWorkspace(workspace);
+        if (workspace is not null) _ = RunWorkspaceShortcut(workspace);
+    }
+
+    private async Task RunWorkspaceShortcut(Workspace workspace)
+    {
+        var errors = await App.Workspaces.HandleShortcutAsync(workspace, App.Configuration.Entries);
+        if (errors.Count > 0) await ShowMessage($"Workspace {workspace.Name}", string.Join(Environment.NewLine, errors));
     }
 
     private void RefreshHotkeys()

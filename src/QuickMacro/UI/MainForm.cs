@@ -41,7 +41,7 @@ public sealed class MainForm : Form
             var entry = _config.Entries.FirstOrDefault(e => e.Id == id);
             if (entry is not null) { _ = RunEntry(entry); return; }
             var workspace = _config.Workspaces.FirstOrDefault(w => w.Id == id);
-            if (workspace is not null) _ = RunWorkspace(workspace);
+            if (workspace is not null) _ = RunWorkspaceShortcut(workspace);
         };
         _hotkeys.RegistrationFailed += message => BeginInvoke(new Action(() => { _tray!.ShowBalloonTip(4000, "Shortcut unavailable", message, ToolTipIcon.Warning); SetStatus("Some shortcuts need attention", false); }));
 
@@ -249,6 +249,17 @@ public sealed class MainForm : Form
             SetStatus(_config.Settings.EnableAllShortcuts ? "●  SHORTCUTS ACTIVE" : "●  SHORTCUTS PAUSED", _config.Settings.EnableAllShortcuts);
         }
         catch (Exception ex) { BeginInvoke(new Action(() => MessageBox.Show(this, ex.Message, "Could not launch workspace", MessageBoxButtons.OK, MessageBoxIcon.Error))); }
+    }
+
+    private async Task RunWorkspaceShortcut(Workspace workspace)
+    {
+        try
+        {
+            var errors = await _workspaceService.HandleShortcutAsync(workspace, _config.Entries);
+            if (errors.Count > 0)
+                BeginInvoke(new Action(() => MessageBox.Show(this, string.Join(Environment.NewLine, errors), $"Workspace “{workspace.Name}”", MessageBoxButtons.OK, MessageBoxIcon.Warning)));
+        }
+        catch (Exception ex) { BeginInvoke(new Action(() => MessageBox.Show(this, ex.Message, "Could not run workspace shortcut action", MessageBoxButtons.OK, MessageBoxIcon.Error))); }
     }
 
     private void SaveAndRefresh()

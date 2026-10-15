@@ -70,6 +70,71 @@ public static class WindowActionService
         return null;
     }
 
+    /// <summary>Raises a placed workspace window without changing its layout rectangle.</summary>
+    public static void RaiseWindow(IntPtr handle)
+    {
+        if (!IsWindow(handle)) return;
+        ShowWindowAsync(handle, SwRestore);
+        SetWindowPos(handle, HwndTop, 0, 0, 0, 0, SwpNoMove | SwpNoSize | SwpShowWindow | SwpNoActivate);
+        BringWindowToTop(handle);
+    }
+
+    /// <summary>Creates and switches to a Windows virtual desktop using the built-in Win+Ctrl+D shortcut.</summary>
+    public static void CreateAndSwitchToNewVirtualDesktop()
+    {
+        const byte vkLWin = 0x5B, vkControl = 0x11, vkD = 0x44;
+        keybd_event(vkLWin, 0, 0, UIntPtr.Zero);
+        keybd_event(vkControl, 0, 0, UIntPtr.Zero);
+        keybd_event(vkD, 0, 0, UIntPtr.Zero);
+        keybd_event(vkD, 0, KeyEventKeyUp, UIntPtr.Zero);
+        keybd_event(vkControl, 0, KeyEventKeyUp, UIntPtr.Zero);
+        keybd_event(vkLWin, 0, KeyEventKeyUp, UIntPtr.Zero);
+    }
+
+    public static void ActivateWindow(IntPtr handle)
+    {
+        if (!IsWindow(handle)) return;
+        ShowWindowAsync(handle, SwRestore);
+        BringWindowToTop(handle);
+        SetForegroundWindow(handle);
+    }
+
+    public static bool IsMinimized(IntPtr handle) => IsWindow(handle) && IsIconic(handle);
+
+    public static void MinimizeWindow(IntPtr handle)
+    {
+        if (IsWindow(handle) && !ShowWindowAsync(handle, SwMinimize))
+            PostMessage(handle, WmSysCommand, ScMinimize, IntPtr.Zero);
+    }
+
+    public static void CloseWindow(IntPtr handle)
+    {
+        if (IsWindow(handle)) PostMessage(handle, WmClose, IntPtr.Zero, IntPtr.Zero);
+    }
+
+    public static void CloseCurrentVirtualDesktop()
+    {
+        const byte vkLWin = 0x5B, vkControl = 0x11, vkF4 = 0x73;
+        keybd_event(vkLWin, 0, 0, UIntPtr.Zero);
+        keybd_event(vkControl, 0, 0, UIntPtr.Zero);
+        keybd_event(vkF4, 0, 0, UIntPtr.Zero);
+        keybd_event(vkF4, 0, KeyEventKeyUp, UIntPtr.Zero);
+        keybd_event(vkControl, 0, KeyEventKeyUp, UIntPtr.Zero);
+        keybd_event(vkLWin, 0, KeyEventKeyUp, UIntPtr.Zero);
+    }
+
+    public static bool IsOnCurrentVirtualDesktop(IntPtr handle)
+    {
+        IVirtualDesktopManager? manager = null;
+        try
+        {
+            manager = (IVirtualDesktopManager)new VirtualDesktopManager();
+            return manager.IsWindowOnCurrentVirtualDesktop(handle, out var onCurrentDesktop) >= 0 && onCurrentDesktop;
+        }
+        catch { return true; }
+        finally { if (manager is not null) Marshal.ReleaseComObject(manager); }
+    }
+
     private static Rectangle GetVisibleFrameBounds(IntPtr handle, NativeRect fallback)
     {
         var result = DwmGetWindowAttribute(handle, 9, out var visible, Marshal.SizeOf<NativeRect>());
@@ -81,6 +146,12 @@ public static class WindowActionService
     private const int SwMinimize = 6;
     private const int SwHide = 0;
     private const int SwRestore = 9;
+    private const uint KeyEventKeyUp = 0x0002;
+    private const uint SwpNoSize = 0x0001;
+    private const uint SwpNoMove = 0x0002;
+    private const uint SwpNoActivate = 0x0010;
+    private const uint SwpShowWindow = 0x0040;
+    private static readonly IntPtr HwndTop = IntPtr.Zero;
     private const uint WmSysCommand = 0x0112;
     private static readonly IntPtr ScMinimize = new(0xF020);
     private const uint ProcessQueryLimitedInformation = 0x1000;
@@ -403,6 +474,8 @@ public static class WindowActionService
     [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool IsIconic(IntPtr hWnd);
     [DllImport("user32.dll", SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool GetWindowRect(IntPtr hWnd, out NativeRect rect);
     [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool SetForegroundWindow(IntPtr hWnd);
+    [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool BringWindowToTop(IntPtr hWnd);
+    [DllImport("user32.dll")] private static extern void keybd_event(byte virtualKey, byte scanCode, uint flags, UIntPtr extraInfo);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetWindowText(IntPtr hWnd, System.Text.StringBuilder text, int maxCount);
     [DllImport("user32.dll")] private static extern int GetWindowTextLength(IntPtr hWnd);
     [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
@@ -416,6 +489,15 @@ public static class WindowActionService
     [DllImport("shell32.dll", PreserveSig = true)] private static extern int SHGetPropertyStoreForWindow(IntPtr hwnd, ref Guid iid, out IPropertyStore propertyStore);
     [DllImport("shell32.dll", CharSet = CharSet.Unicode, PreserveSig = true)] private static extern int SHGetPropertyStoreFromParsingName(string path, IntPtr bindContext, uint flags, ref Guid iid, out IPropertyStore propertyStore);
     [DllImport("ole32.dll")] private static extern int PropVariantClear(ref PropVariant propVariant);
+
+    [ComImport, Guid("A5CD92FF-29BE-454C-8D04-D82879FB3F1B"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    private interface IVirtualDesktopManager
+    {
+        [PreserveSig] int IsWindowOnCurrentVirtualDesktop(IntPtr topLevelWindow, [MarshalAs(UnmanagedType.Bool)] out bool onCurrentDesktop);
+    }
+
+    [ComImport, Guid("AA509086-5CA9-4C25-8F95-589D3C07B48A"), ClassInterface(ClassInterfaceType.None)]
+    private class VirtualDesktopManager { }
 
     private delegate bool EnumWindowsCallback(IntPtr hWnd, IntPtr lParam);
 

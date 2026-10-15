@@ -14,6 +14,8 @@ public sealed class WorkspaceDialog : Form
     private readonly Label _shortcutLabel = new() { AutoSize = true, ForeColor = Color.FromArgb(25, 35, 52) };
     private readonly CheckBox _windowsModifier = new() { Text = "Windows key", AutoSize = true };
     private readonly CheckBox _enabled = new() { Text = "Workspace enabled", Checked = true, AutoSize = true };
+    private readonly CheckBox _openOnNewDesktop = new() { Text = "Open on a new Windows desktop", AutoSize = true };
+    private readonly ComboBox _repeatAction = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 250 };
     private readonly ListBox _availableApps = new() { Dock = DockStyle.Fill, IntegralHeight = false, BackColor = Surface, ForeColor = Color.FromArgb(25, 35, 52), BorderStyle = BorderStyle.None, DisplayMember = nameof(LauncherEntry.Name) };
     private readonly List<WorkspaceItem> _workspaceItems = [];
     private WorkspaceCanvas _canvas = null!;
@@ -36,10 +38,12 @@ public sealed class WorkspaceDialog : Form
         Height = Math.Min(730, Math.Max(420, (int)(workArea.Height / scale) - 32));
         MinimumSize = new Size(Math.Min(760, Width), Math.Min(500, Height));
         StartPosition = FormStartPosition.CenterParent; BackColor = Canvas; ForeColor = Color.FromArgb(25, 35, 52); Font = new Font("Segoe UI", 9F); KeyPreview = true;
-        if (workspace is not null) { _name.Text = workspace.Name; _shortcut = workspace.Shortcut; _enabled.Checked = workspace.Enabled; _workspaceItems.AddRange(workspace.Items.Select(Clone)); }
+        _repeatAction.Items.AddRange(["Launch / arrange again", "Minimize / restore apps", "Close workspace apps", "Close apps and this desktop"]);
+        _repeatAction.SelectedIndex = (int)(workspace?.RepeatAction ?? WorkspaceRepeatAction.Launch);
+        if (workspace is not null) { _name.Text = workspace.Name; _shortcut = workspace.Shortcut; _enabled.Checked = workspace.Enabled; _openOnNewDesktop.Checked = workspace.OpenOnNewDesktop; _workspaceItems.AddRange(workspace.Items.Select(Clone)); }
 
         var root = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(14), ColumnCount = 1, RowCount = 3, BackColor = Canvas };
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 120)); root.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 72));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 150)); root.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 72));
         root.Controls.Add(BuildHeader(), 0, 0);
         root.Controls.Add(BuildEditor(), 0, 1);
         root.Controls.Add(BuildFooter(), 0, 2);
@@ -61,15 +65,16 @@ public sealed class WorkspaceDialog : Form
         var fields = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, BackColor = Canvas, Margin = Padding.Empty };
         fields.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 42)); fields.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 58));
 
-        var namePanel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3, BackColor = Canvas, Margin = new Padding(0, 0, 18, 0) };
-        namePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 24)); namePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38)); namePanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        var namePanel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 4, BackColor = Canvas, Margin = new Padding(0, 0, 18, 0) };
+        namePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 24)); namePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38)); namePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 24)); namePanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         namePanel.Controls.Add(new Label { Text = "Workspace name", Dock = DockStyle.Fill, ForeColor = Color.FromArgb(75, 89, 109), TextAlign = ContentAlignment.MiddleLeft }, 0, 0);
         _name.Dock = DockStyle.Fill; _name.Margin = Padding.Empty; _name.BackColor = Raised; _name.ForeColor = Color.FromArgb(25, 35, 52); _name.BorderStyle = BorderStyle.FixedSingle;
         namePanel.Controls.Add(_name, 0, 1);
         namePanel.Controls.Add(_enabled, 0, 2); _enabled.ForeColor = Color.FromArgb(75, 89, 109); _enabled.Margin = new Padding(0, 2, 0, 0);
+        namePanel.Controls.Add(_openOnNewDesktop, 0, 3); _openOnNewDesktop.ForeColor = Color.FromArgb(75, 89, 109); _openOnNewDesktop.Margin = new Padding(0, 2, 0, 0);
 
-        var shortcutPanel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3, BackColor = Canvas, Margin = Padding.Empty };
-        shortcutPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 24)); shortcutPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38)); shortcutPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        var shortcutPanel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 4, BackColor = Canvas, Margin = Padding.Empty };
+        shortcutPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 24)); shortcutPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38)); shortcutPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 24)); shortcutPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         shortcutPanel.Controls.Add(new Label { Text = "Global shortcut", Dock = DockStyle.Fill, ForeColor = Color.FromArgb(75, 89, 109), TextAlign = ContentAlignment.MiddleLeft }, 0, 0);
         var shortcutButtons = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, Margin = Padding.Empty, Padding = Padding.Empty };
         var record = Button("Set shortcut"); record.Click += (_, _) => { _recording = true; _shortcutLabel.Text = "Press a key combination"; Focus(); };
@@ -77,9 +82,14 @@ public sealed class WorkspaceDialog : Form
         shortcutButtons.Controls.Add(record); shortcutButtons.Controls.Add(clear); shortcutButtons.Controls.Add(_shortcutLabel);
         _shortcutLabel.Margin = new Padding(9, 8, 8, 0);
         shortcutPanel.Controls.Add(shortcutButtons, 0, 1);
-        var options = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, Margin = Padding.Empty, Padding = Padding.Empty };
-        options.Controls.Add(_windowsModifier); _windowsModifier.ForeColor = Color.FromArgb(75, 89, 109); _windowsModifier.Margin = new Padding(2, 2, 0, 0);
-        shortcutPanel.Controls.Add(options, 0, 2);
+        _windowsModifier.ForeColor = Color.FromArgb(75, 89, 109); _windowsModifier.Margin = new Padding(2, 2, 0, 0);
+        shortcutPanel.Controls.Add(_windowsModifier, 0, 2);
+        var repeatPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, Margin = Padding.Empty, Padding = Padding.Empty };
+        repeatPanel.Controls.Add(new Label { Text = "Shortcut again", AutoSize = true, ForeColor = Color.FromArgb(75, 89, 109), Margin = new Padding(2, 5, 8, 0) });
+        repeatPanel.Controls.Add(_repeatAction);
+        _repeatAction.SelectedIndexChanged += (_, _) => _repeatAction.Enabled = _openOnNewDesktop.Checked || _repeatAction.SelectedIndex != 3;
+        _openOnNewDesktop.CheckedChanged += (_, _) => _repeatAction.Enabled = _openOnNewDesktop.Checked || _repeatAction.SelectedIndex != 3;
+        shortcutPanel.Controls.Add(repeatPanel, 0, 3);
 
         fields.Controls.Add(namePanel, 0, 0); fields.Controls.Add(shortcutPanel, 1, 0);
         root.Controls.Add(fields, 0, 1);
@@ -265,7 +275,7 @@ public sealed class WorkspaceDialog : Form
         if (_workspaceItems.Count == 0) { MessageBox.Show(this, "Add at least one app to this workspace."); return; }
         var missing = _workspaceItems.FirstOrDefault(item => ResolveEntry(item) is null || item.Target is not null && ShortcutRules.ValidateEntry(item.Target) is not null);
         if (missing is not null) { MessageBox.Show(this, "Remove any missing apps from this workspace."); return; }
-        Workspace = new Workspace { Id = _id, Name = _name.Text.Trim(), Shortcut = _shortcut, Enabled = _enabled.Checked, Items = _workspaceItems.Select(Clone).ToList() };
+        Workspace = new Workspace { Id = _id, Name = _name.Text.Trim(), Shortcut = _shortcut, Enabled = _enabled.Checked, OpenOnNewDesktop = _openOnNewDesktop.Checked, RepeatAction = (WorkspaceRepeatAction)Math.Clamp(_repeatAction.SelectedIndex, 0, 3), Items = _workspaceItems.Select(Clone).ToList() };
         DialogResult = DialogResult.OK; Close();
     }
 
@@ -313,6 +323,9 @@ public sealed class WorkspaceDialog : Form
             for (var i = 1; i < 10; i++) graphics.DrawLine(gridPen, _desktop.Left, _desktop.Top + _desktop.Height * i / 10, _desktop.Right, _desktop.Top + _desktop.Height * i / 10);
 
             for (var i = 0; i < _items.Count; i++) DrawItem(graphics, _items[i], i);
+            // Draw handles after all cards so every window can be resized directly,
+            // without selecting it first.
+            foreach (var item in _items) DrawResizeHandles(graphics, item);
             if (_items.Count == 0)
             {
                 using var hint = new SolidBrush(Color.FromArgb(160, 190, 205, 220)); using var font = new Font("Segoe UI", 11F);
@@ -350,13 +363,26 @@ public sealed class WorkspaceDialog : Form
             }
             var sizeText = $"{item.Width}% × {item.Height}%";
             TextRenderer.DrawText(graphics, sizeText, Font, new Rectangle(rect.Left + inset, rect.Bottom - 24, rect.Width - inset - 13, 18), Color.FromArgb(205, 225, 246), TextFormatFlags.EndEllipsis | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine);
-            if (selected)
+        }
+
+        private void DrawResizeHandles(Graphics graphics, WorkspaceItem item)
+        {
+            var rect = ItemBounds(item);
+            var midX = rect.Left + rect.Width / 2; var midY = rect.Top + rect.Height / 2;
+            var points = new[]
             {
-                using var handle = new SolidBrush(Color.White);
-                const int handleSize = 7;
-                var midX = rect.Left + rect.Width / 2; var midY = rect.Top + rect.Height / 2;
-                foreach (var point in new[] { new Point(rect.Left, rect.Top), new Point(midX, rect.Top), new Point(rect.Right, rect.Top), new Point(rect.Right, midY), new Point(rect.Right, rect.Bottom), new Point(midX, rect.Bottom), new Point(rect.Left, rect.Bottom), new Point(rect.Left, midY) })
-                    graphics.FillEllipse(handle, point.X - handleSize / 2, point.Y - handleSize / 2, handleSize, handleSize);
+                new Point(rect.Left, rect.Top), new Point(midX, rect.Top), new Point(rect.Right, rect.Top),
+                new Point(rect.Right, midY), new Point(rect.Right, rect.Bottom), new Point(midX, rect.Bottom),
+                new Point(rect.Left, rect.Bottom), new Point(rect.Left, midY)
+            };
+            const int handleSize = 9;
+            using var outline = new Pen(Color.FromArgb(35, 73, 124), 1.25f);
+            using var fill = new SolidBrush(Color.White);
+            foreach (var point in points)
+            {
+                var handle = new Rectangle(point.X - handleSize / 2, point.Y - handleSize / 2, handleSize, handleSize);
+                graphics.FillEllipse(fill, handle);
+                graphics.DrawEllipse(outline, handle);
             }
         }
 

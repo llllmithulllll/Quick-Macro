@@ -112,8 +112,10 @@ internal sealed class WorkspaceLayoutEditor : Grid
             Canvas.SetLeft(card, _screenLeft + _screenWidth * item.X / 100);
             Canvas.SetTop(card, _screenTop + _screenHeight * item.Y / 100);
             _canvas.Children.Add(card);
-            if (item == _active) AddResizeHandles(item);
         }
+        // Keep resize targets visible for every app so users can grab any edge
+        // immediately, without first clicking to select its preview card.
+        foreach (var item in _items) AddResizeHandles(item);
     }
 
     private void AddLine(double x1, double y1, double x2, double y2)

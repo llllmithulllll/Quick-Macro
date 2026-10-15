@@ -57,9 +57,13 @@ public sealed class Workspace
     public Guid Id { get; set; } = Guid.NewGuid();
     public string Name { get; set; } = "";
     public bool Enabled { get; set; } = true;
+    public bool OpenOnNewDesktop { get; set; }
+    public WorkspaceRepeatAction RepeatAction { get; set; } = WorkspaceRepeatAction.Launch;
     public ShortcutBinding? Shortcut { get; set; }
     public List<WorkspaceItem> Items { get; set; } = [];
 }
+
+public enum WorkspaceRepeatAction { Launch, MinimizeRestore, CloseApps, CloseAppsAndDesktop }
 
 // Coordinates are percentages of the primary display's working area (0–100).
 public sealed class WorkspaceItem
