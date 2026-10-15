@@ -15,23 +15,32 @@ public sealed class GlobalHotkeyService : IDisposable
     public event Action<string>? RegistrationFailed;
 
     public void Replace(IEnumerable<LauncherEntry> entries, bool globallyEnabled)
+        => Replace(entries, [], globallyEnabled);
+
+    public void Replace(IEnumerable<LauncherEntry> entries, IEnumerable<Workspace> workspaces, bool globallyEnabled)
     {
         Clear();
         if (!globallyEnabled) return;
         var id = 0x5100;
         foreach (var entry in entries.Where(e => e.Enabled && e.Shortcut is not null))
         {
-            var error = ShortcutRules.Validate(entry.Shortcut);
-            if (error is not null) { RegistrationFailed?.Invoke($"{entry.Name}: {error}"); continue; }
-            var shortcut = entry.Shortcut!;
+            Register(entry.Id, entry.Name, entry.Shortcut!);
+        }
+        foreach (var workspace in workspaces.Where(w => w.Enabled && w.Shortcut is not null))
+            Register(workspace.Id, $"Workspace “{workspace.Name}”", workspace.Shortcut!);
+
+        void Register(Guid targetId, string name, ShortcutBinding shortcut)
+        {
+            var error = ShortcutRules.Validate(shortcut);
+            if (error is not null) { RegistrationFailed?.Invoke($"{name}: {error}"); return; }
             uint mods = ModNoRepeat;
             if (shortcut.Alt) mods |= ModAlt;
             if (shortcut.Control) mods |= ModControl;
             if (shortcut.Shift) mods |= ModShift;
             if (shortcut.Windows) mods |= ModWin;
             if (!RegisterHotKey(_owner.Handle, id, mods, (uint)shortcut.Key))
-                RegistrationFailed?.Invoke($"{entry.Name}: {shortcut} is already in use or unavailable. Choose a different shortcut.");
-            else _registrations[id] = entry.Id;
+                RegistrationFailed?.Invoke($"{name}: {shortcut} is already in use or unavailable. Choose a different shortcut.");
+            else _registrations[id] = targetId;
             id++;
         }
     }
